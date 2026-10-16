@@ -1,0 +1,32 @@
+services:
+  pulsewatch:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - pulsewatch-data:/data
+      - ./examples/targets.json:/app/examples/targets.json:ro
+    command: ["run", "--targets", "/app/examples/targets.json", "--db", "/data/pulsewatch.db"]
+    env_file:
+      - .env
+    environment:
+      PULSEWATCH_DB: /data/pulsewatch.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8080), 2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - pulsewatch
+    ports:
+      - "8080:8080"
+    volumes:
+      - pulsewatch-data:/data
+    command:
+      ["serve", "--targets", "/app/examples/targets.json", "--db", "/data/pulsewatch.db", "--host", "0.0.0.0", "--port", "8080"]
+
+volumes:
+  pulsewatch-data:

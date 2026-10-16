@@ -1,0 +1,19 @@
+[
+  {
+    "name": "vtu-exam-seat-availability",
+    "url": "https://www.vtu.ac.in/exam-seat-allotment",
+    "selector": null,
+    "as_html": true,
+    "interval": 300,
+    "cooldown": 900,
+    "tags": ["education", "exam"]
+  },
+  {
+    "name": "gpu-cloud-pricing",
+    "url": "https://api.example-cloud.com/v1/pricing/gpu",
+    "json_path": "offers",
+    "interval": 600,
+    "cooldown": 1800,
+    "tags": ["cloud", "pricing"]
+  }
+]
