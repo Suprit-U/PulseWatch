@@ -132,3 +132,31 @@ def test_purge_removes_old_rows(store, monitor_factory, target, clock):
     clock.advance(40 * 86400)
     removed = monitor.purge()
     assert removed["snapshots"] == 2 and store.counts()["snapshots"] == 0
+
+def test_304_not_modified_does_not_erase_the_baseline(store, target, clock):
+    """Regression test: a 304 must never overwrite the stored snapshot body.
+
+    Before the fix the empty body of a 304 was persisted as the new baseline, so the next
+    real change was diffed against an empty document: every line counted as added, the
+    removed side was always empty and the noise floor stopped working. A two-token edit
+    was therefore reported as a major change instead of being suppressed.
+    """
+    quiet = Settings(retry=Retry(attempts=1), jitter=0.0, min_tokens=5, retention_days=30)
+    fetcher = FakeFetcher({"https://example.edu/seats": [SEATS_V1, None, SEATS_V2]},
+                          etag='W/"v1"')
+    monitor = Monitor(store, fetcher, [], quiet, clock=clock)
+
+    assert monitor.check_once(target).reason == "baseline stored"
+
+    cached = monitor.check_once(target)
+    assert cached.reason == "not modified"
+    assert cached.changed is False
+    kept = store.latest_snapshot("seats")
+    assert kept["body"] == SEATS_V1, "304 response wiped the stored baseline"
+    assert kept["digest"] != "e3b0c44298fc", "304 response stored the empty-string digest"
+
+    # The two-token edit that follows a 304 must still be suppressed as noise.
+    after = monitor.check_once(target)
+    assert after.changed is True, "the small edit should be detected as a change"
+    assert after.alerted is False, "but the noise floor must suppress the alert"
+    assert "noise floor" in after.reason

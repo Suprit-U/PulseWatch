@@ -93,11 +93,25 @@ class Monitor:
                           last_modified=response.last_modified)
             return CheckOutcome(target.name, reason="baseline stored", latency_ms=latency_ms)
 
+        if response.from_cache:
+            # A 304 means "unchanged since your ETag", and the body is empty by design.
+            # It must therefore never be written over the stored snapshot: doing so
+            # replaces the baseline with an empty document, so the next real change is
+            # diffed against nothing -- every line looks added and the noise floor stops
+            # working. Only the check telemetry is recorded; the snapshot is left intact.
+            self._persist(target, status=response.status,
+                          body=snapshot["body"] or "", digest_value=snapshot["digest"],
+                          token_count=int(snapshot["token_count"] or 0),
+                          latency_ms=latency_ms,
+                          etag=snapshot["etag"] or response.etag,
+                          last_modified=snapshot["last_modified"] or response.last_modified)
+            return CheckOutcome(target.name, reason="not modified", latency_ms=latency_ms)
+
         self._persist(target, status=response.status, body=response.body, digest_value=new_digest,
                       token_count=token_count, latency_ms=latency_ms, etag=response.etag,
                       last_modified=response.last_modified)
 
-        if response.from_cache or new_digest == snapshot["digest"]:
+        if new_digest == snapshot["digest"]:
             return CheckOutcome(target.name, reason="not modified", latency_ms=latency_ms)
 
         before_lines = normalize(snapshot["body"] or "", json_path=target.json_path,

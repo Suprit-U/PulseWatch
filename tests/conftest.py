@@ -28,7 +28,11 @@ class FakeClock:
 
 
 class FakeFetcher:
-    """Serves queued bodies per URL and records the conditional headers it saw."""
+    """Serves queued bodies per URL and records the conditional headers it saw.
+
+    A queued body of ``None`` is returned as a 304 Not Modified response, which is what a
+    real server sends when the conditional headers say the client already has the document.
+    """
 
     def __init__(self, pages: dict[str, list[str]], *, etag: str | None = None,
                  last_modified: str | None = None, fail_times: int = 0) -> None:
@@ -49,6 +53,12 @@ class FakeFetcher:
             from pulsewatch.fetcher import FetchError
             raise FetchError(url, 3, "HTTP 503")
         body = next(self._pages[url])
+        if body is None:
+            # A queued ``None`` models a 304 Not Modified: the server asserts the document
+            # is unchanged, so the body is empty and ``from_cache`` is set.
+            return FetchResponse(status=304, body="", etag=self._etag,
+                                 last_modified=self._last_modified, elapsed_ms=4.0,
+                                 from_cache=True)
         return FetchResponse(status=200, body=body, etag=self._etag,
                              last_modified=self._last_modified, elapsed_ms=12.0)
 
